@@ -1,0 +1,62 @@
+#include <iostream>
+#include <curl/curl.h>
+
+//Ёто макрос, который определ€ет размер буфера дл€ чтени€ данных.
+#define BUFFER_SIZE 1024
+using namespace std;
+//////////////////////////////////////////////¬ проекте указываетс€ ссылка
+
+
+//Ёто функци€ обратного вызова writeCallback, котора€ вызываетс€ при получении данных от сервера.
+//ќна записывает полученные данные в строку, указанную в параметре data.
+size_t writeCallback(void* ptr, size_t size, size_t nmemb, ::string* data) {
+    data->append((char*)ptr, size * nmemb);
+    return size * nmemb;
+}
+
+int main(int argc, char* argv[]) {
+    //ѕроверка, будет ли передан аргумент командной строки URL, и выводит 
+    //сообщение об использовании, если аргумент не был передан
+    if (argc != 2) {
+        ::cerr << "»спользование: " << argv[0] << " <URL>" << ::endl;
+        return 1;
+    }
+
+    //Ётот блок кода сохран€ет переданный URL в строковую переменную url
+    ::string url = argv[1];
+
+    //Ётот блок кода инициализирует библиотеку libcurl и провер€ет, была ли инициализаци€ успешной
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        ::cerr << "Ќе удалось инициализировать CURL" << ::endl;
+        return 1;
+    }
+
+    //Ётот блок кода устанавливает опцию CURLOPT_URL 
+    //дл€ указани€ URL, на который будет отправлен HTTP-запрос.
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+
+    //Ётот блок кода устанавливает функцию обратного вызова writeCallback, котора€ будет вызвана 
+    //при получении данных от сервера, и указывает на строку response, в которую будут записаны данные.
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+    ::string response;
+
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+
+    //Ётот блок кода выполн€ет HTTP-запрос с помощью библиотеки libcurl и провер€ет успешность выполнени€ запроса.
+    //≈сли запрос завершилс€ с ошибкой, выводитс€ сообщение об ошибке.
+    CURLcode res = curl_easy_perform(curl);
+
+    if (res != CURLE_OK) {
+        ::cerr << "Ќе удалось выполнить HTTP-запрос: " << curl_easy_strerror(res) << ::endl;
+        curl_easy_cleanup(curl);
+        return 1;
+    }
+
+    curl_easy_cleanup(curl);
+
+    // ¬ывод тела ответа
+    ::cout << response << ::endl;
+
+    return 0;
+}
