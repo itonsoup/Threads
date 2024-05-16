@@ -1,0 +1,5 @@
+﻿  laba 3.10.cpp
+C:\Users\admin\source\repos\laba 3.10\laba 3.10\laba 3.10.cpp(41,26): warning C4267: инициализация: преобразование из "size_t" в "int"; возможна потеря данных
+  laba 3.10.vcxproj -> C:\Users\admin\source\repos\laba 3.10\x64\Debug\laba 3.10.exe
+  "pwsh.exe" не является внутренней или внешней
+  командой, исполняемой программой или пакетным файлом.
