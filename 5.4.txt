@@ -1,0 +1,90 @@
+#include <iostream>
+#include <curl/curl.h>
+#include <thread>
+#include <mutex>
+#include <condition_variable>
+
+#define BUFFER_SIZE 1024
+using namespace std;
+/////////////////////////////////////UML адрес в проекте
+
+//«десь объ€вл€ютс€ глобальные переменные дл€ синхронизации потоков: мьютекс mtx дл€ обеспечени€ 
+//многопоточного доступа к данным, условна€ переменна€ cv дл€ сигнализации о готовности данных, 
+//и флаг ready, указывающий, готовы ли данные дл€ использовани€.
+::mutex mtx;
+::condition_variable cv;
+bool ready = false;
+
+//Ёто функци€ обратного вызова writeCallback, котора€ вызываетс€ библиотекой libcurl при получении
+//данных от сервера. ќна записывает полученные данные в строку, указанную в параметре data.
+size_t writeCallback(void* ptr, size_t size, size_t nmemb, ::string* data) {
+    data->append((char*)ptr, size * nmemb);
+    return size * nmemb;
+}
+
+//Ёто функци€ networkThread, котора€ выполн€ет HTTP-запрос асинхронно в отдельном потоке. 
+//ќна использует библиотеку libcurl дл€ выполнени€ запроса. ѕосле получени€ ответа от сервера, 
+//она устанавливает флаг ready в true и уведомл€ет ожидающий поток с помощью условной переменной.
+void networkThread(const ::string& url, ::string& response) {
+    CURL* curl = curl_easy_init();
+    if (!curl) {
+        ::cerr << "Ќе удалось инициализировать CURL" << ::endl;
+        return;
+    }
+
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, writeCallback);
+
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &response);
+
+    CURLcode res = curl_easy_perform(curl);
+
+    if (res != CURLE_OK) {
+        ::cerr << "Ќе удалось выполнить HTTP-запрос: " << curl_easy_strerror(res) << ::endl;
+    }
+
+    curl_easy_cleanup(curl);
+
+    {
+        ::lock_guard<::mutex> lock(mtx);
+        ready = true;
+    }
+    cv.notify_one();
+}
+
+//Ёто функци€ userInteractionThread, котора€ ожидает, пока не будут готовы данные дл€ вывода. 
+//ќна блокирует выполнение до тех пор, пока флаг ready не станет true, с помощью условной переменной.
+void userInteractionThread(::string& response) {
+    {
+        ::unique_lock<::mutex> lock(mtx);
+        cv.wait(lock, [] { return ready; });
+    }
+
+    // ¬ывод тела ответа
+    ::cout << response << ::endl;
+}
+
+int main(int argc, char* argv[]) {
+    //‘ункци€ main
+    //ќна провер€ет, был ли передан аргумент командной строки (URL), и выводит сообщение об 
+    //использовании, если аргумент не был передан. 
+    //«атем она создает два потока: один дл€ выполнени€ HTTP-запроса (networkThread), а 
+    //другой дл€ вывода ответа пользователю (userInteractionThread). 
+    //ѕосле завершени€ работы обоих потоков, программа завершает свою работу.
+    if (argc != 2) {
+        ::cerr << "Usage: " << argv[0] << " <URL>" << ::endl;
+        return 1;
+    }
+
+    ::string url = argv[1];
+    ::string response;
+
+    ::thread network(networkThread, url, ::ref(response));
+    ::thread interaction(userInteractionThread, ::ref(response));
+
+    network.join();
+    interaction.join();
+
+    return 0;
+}
